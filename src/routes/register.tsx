@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { Eye, EyeOff } from "lucide-react";
 import { useFormValidation, rules, compose } from "@/lib/validation";
 import { BASE_URL } from "@/config/apiConfig";
 
@@ -16,6 +17,7 @@ type Field = "name" | "registerNo" | "department" | "email" | "password";
 function RegisterPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [f, setF] = useState({
     name: "",
     email: "",
@@ -92,7 +94,8 @@ function RegisterPage() {
 
   return (
     <Shell>
-      <div className="max-w-md mx-auto">
+      <div className="flex min-h-[calc(100vh-10rem)] items-center justify-center">
+      <div className="w-full max-w-md">
         <GlassCard tint="plain" className="p-8">
           <h1 className="text-2xl font-bold">Create student account</h1>
           <form className="mt-5 space-y-3" onSubmit={submit}>
@@ -159,7 +162,7 @@ function RegisterPage() {
               <select
                 value={f.year}
                 onChange={(e) => setF({ ...f, year: e.target.value })}
-                className="w-full rounded-md border px-3 py-2 text-sm bg-white"
+                className="w-full rounded-md border px-3 py-2 pr-6 text-sm bg-white focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
               >
                 <option>1st Year</option>
                 <option>2nd Year</option>
@@ -211,6 +214,7 @@ function RegisterPage() {
             </Button>
           </form>
         </GlassCard>
+      </div>
       </div>
     </Shell>
   );
