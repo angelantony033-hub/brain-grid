@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Shell, GlassCard } from "@/components/Shell";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -72,8 +73,7 @@ function AdminLoginPage() {
               <Label>
                 Password<span style={{ color: "red" }}>*</span>
               </Label>
-              <Input
-                type="password"
+              <PasswordInput
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required

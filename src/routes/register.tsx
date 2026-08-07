@@ -2,6 +2,7 @@ import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useState, useMemo } from "react";
 import { Shell, GlassCard } from "@/components/Shell";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -192,8 +193,7 @@ function RegisterPage() {
               <Label>
                 Password<span style={{ color: "red" }}>*</span>
               </Label>
-              <Input
-                type="password"
+              <PasswordInput
                 value={f.password}
                 className={inputClass("password")}
                 onChange={(e) => {
