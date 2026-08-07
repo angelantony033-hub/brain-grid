@@ -159,7 +159,7 @@ function RegisterPage() {
               <select
                 value={f.year}
                 onChange={(e) => setF({ ...f, year: e.target.value })}
-                className="w-full rounded-md border px-3 py-2 text-sm bg-white"
+                className="w-full rounded-md border px-3 py-2 text-sm bg-white outline-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors"
               >
                 <option>1st Year</option>
                 <option>2nd Year</option>

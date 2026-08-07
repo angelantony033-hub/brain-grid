@@ -25,9 +25,9 @@ function Index() {
             A HackerRank-style playground built for the Department of Information Technology —
             timed quizzes, real multi-language code execution, live leaderboards.
           </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-            <Button asChild size="lg"><Link to="/register">Get started</Link></Button>
-            <Button asChild size="lg" variant="secondary"><Link to="/login">Student Login</Link></Button>
+          <div className="mt-6 flex flex-nowrap gap-2">
+            <Button asChild size="lg" className="px-4 text-sm sm:px-8 sm:text-base"><Link to="/register">Get started</Link></Button>
+            <Button asChild size="lg" variant="secondary" className="px-4 text-sm sm:px-8 sm:text-base"><Link to="/login">Student Login</Link></Button>
           </div>
         </div>
       </section>
