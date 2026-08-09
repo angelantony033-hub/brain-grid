@@ -19,6 +19,7 @@ import { Route as SubmissionsRouteImport } from './routes/submissions'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as AdminCodingRouteImport } from './routes/admin.coding'
 import { Route as AdminDebuggingRouteImport } from './routes/admin.debugging'
+import { Route as AdminLeaderboardRouteImport } from './routes/admin.leaderboard'
 import { Route as AdminProblemsRouteImport } from './routes/admin.problems'
 import { Route as AdminQuizzesRouteImport } from './routes/admin.quizzes'
 import { Route as AdminSubmissionsRouteImport } from './routes/admin.submissions'
@@ -78,6 +79,11 @@ const AdminDebuggingRoute = AdminDebuggingRouteImport.update({
   path: '/admin/debugging',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminLeaderboardRoute = AdminLeaderboardRouteImport.update({
+  id: '/admin/leaderboard',
+  path: '/admin/leaderboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminProblemsRoute = AdminProblemsRouteImport.update({
   id: '/admin/problems',
   path: '/admin/problems',
@@ -129,6 +135,7 @@ export interface FileRoutesByFullPath {
   '/submissions': typeof SubmissionsRoute
   '/admin/coding': typeof AdminCodingRoute
   '/admin/debugging': typeof AdminDebuggingRoute
+  '/admin/leaderboard': typeof AdminLeaderboardRoute
   '/admin/problems': typeof AdminProblemsRoute
   '/admin/quizzes': typeof AdminQuizzesRoute
   '/admin/submissions': typeof AdminSubmissionsRoute
@@ -149,6 +156,7 @@ export interface FileRoutesByTo {
   '/submissions': typeof SubmissionsRoute
   '/admin/coding': typeof AdminCodingRoute
   '/admin/debugging': typeof AdminDebuggingRoute
+  '/admin/leaderboard': typeof AdminLeaderboardRoute
   '/admin/problems': typeof AdminProblemsRoute
   '/admin/quizzes': typeof AdminQuizzesRoute
   '/admin/submissions': typeof AdminSubmissionsRoute
@@ -170,6 +178,7 @@ export interface FileRoutesById {
   '/submissions': typeof SubmissionsRoute
   '/admin/coding': typeof AdminCodingRoute
   '/admin/debugging': typeof AdminDebuggingRoute
+  '/admin/leaderboard': typeof AdminLeaderboardRoute
   '/admin/problems': typeof AdminProblemsRoute
   '/admin/quizzes': typeof AdminQuizzesRoute
   '/admin/submissions': typeof AdminSubmissionsRoute
@@ -192,6 +201,7 @@ export interface FileRouteTypes {
     | '/submissions'
     | '/admin/coding'
     | '/admin/debugging'
+    | '/admin/leaderboard'
     | '/admin/problems'
     | '/admin/quizzes'
     | '/admin/submissions'
@@ -212,6 +222,7 @@ export interface FileRouteTypes {
     | '/submissions'
     | '/admin/coding'
     | '/admin/debugging'
+    | '/admin/leaderboard'
     | '/admin/problems'
     | '/admin/quizzes'
     | '/admin/submissions'
@@ -232,6 +243,7 @@ export interface FileRouteTypes {
     | '/submissions'
     | '/admin/coding'
     | '/admin/debugging'
+    | '/admin/leaderboard'
     | '/admin/problems'
     | '/admin/quizzes'
     | '/admin/submissions'
@@ -253,6 +265,7 @@ export interface RootRouteChildren {
   SubmissionsRoute: typeof SubmissionsRoute
   AdminCodingRoute: typeof AdminCodingRoute
   AdminDebuggingRoute: typeof AdminDebuggingRoute
+  AdminLeaderboardRoute: typeof AdminLeaderboardRoute
   AdminProblemsRoute: typeof AdminProblemsRoute
   AdminQuizzesRoute: typeof AdminQuizzesRoute
   AdminSubmissionsRoute: typeof AdminSubmissionsRoute
@@ -336,6 +349,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminDebuggingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/leaderboard': {
+      id: '/admin/leaderboard'
+      path: '/admin/leaderboard'
+      fullPath: '/admin/leaderboard'
+      preLoaderRoute: typeof AdminLeaderboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/problems': {
       id: '/admin/problems'
       path: '/admin/problems'
@@ -405,6 +425,7 @@ const rootRouteChildren: RootRouteChildren = {
   SubmissionsRoute: SubmissionsRoute,
   AdminCodingRoute: AdminCodingRoute,
   AdminDebuggingRoute: AdminDebuggingRoute,
+  AdminLeaderboardRoute: AdminLeaderboardRoute,
   AdminProblemsRoute: AdminProblemsRoute,
   AdminQuizzesRoute: AdminQuizzesRoute,
   AdminSubmissionsRoute: AdminSubmissionsRoute,

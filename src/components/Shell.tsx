@@ -23,7 +23,7 @@ export function Shell({ children }: { children: ReactNode }) {
     { to: "/admin/quizzes", label: "Quizzes", icon: ListChecks },
     { to: "/admin/problems", label: "Problems", icon: Code2 },
     { to: "/admin/debugging", label: "Debugging", icon: Bug },
-    { to: "/leaderboard", label: "Leaderboard", icon: Trophy },
+    { to: "/admin/leaderboard", label: "Leaderboard", icon: Trophy },
   ];
   const links = user?.role === "admin" ? adminLinks : studentLinks;
 
@@ -32,18 +32,12 @@ export function Shell({ children }: { children: ReactNode }) {
       <header className="sticky top-0 z-40 backdrop-blur-xl bg-white/60 border-b border-white/60">
         <div className="mx-auto max-w-7xl px-4 py-3 flex items-center gap-4">
           <Link to="/" className="flex items-center gap-3 min-w-0">
-            <img
-              src="/college-logo.png"
-              alt="DMI Engineering College logo"
-              className="h-12 w-12 shrink-0 rounded-full object-cover"
-            />
+            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-pastel-mint to-pastel-lavender grid place-items-center shadow-sm shrink-0">
+              <Code2 className="h-5 w-5 text-foreground" />
+            </div>
             <div className="min-w-0">
-              {/* Below 480px: show "DMI" only */}
-              <div className="text-2xl font-bold tracking-wide leading-none xs:hidden text-[oklch(0.25_0.06_280)]">DMI</div>
-              {/* 480px and above: show full name */}
-              <div className="hidden xs:block text-sm sm:text-base font-bold leading-tight truncate">DMI ENGINEERING COLLEGE</div>
-              {/* Subtitle: only on lg (1024px+) */}
-              <div className="hidden lg:block text-xs text-muted-foreground truncate">Department of Information Technology</div>
+              <div className="text-sm sm:text-base font-bold leading-tight truncate">DMI ENGINEERING COLLEGE</div>
+              <div className="text-xs text-muted-foreground truncate">Department of Information Technology</div>
             </div>
           </Link>
           <div className="ml-auto flex items-center gap-2">

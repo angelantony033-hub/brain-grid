@@ -1,39 +1,83 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { Shell, GlassCard } from "@/components/Shell";
 import { Guard } from "@/components/Guard";
-import { store, uid } from "@/lib/storage";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import type { CodingProblem, TestCase } from "@/lib/types";
 import { Trash2, Plus, Upload, Eye, EyeOff } from "lucide-react";
 import { readSheet, rowsToProblems } from "@/lib/excel";
+import { BASE_URL } from "@/config/apiConfig";
 
 export const Route = createFileRoute("/admin/problems")({ component: () => <Guard role="admin"><PAdmin /></Guard> });
 
+function authHeaders() {
+  const token = localStorage.getItem("admin_token");
+  return { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
+}
+
 function PAdmin() {
-  const [items, setItems] = useState<CodingProblem[]>(store.getProblems());
+  const [items, setItems] = useState<CodingProblem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<CodingProblem | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  function save(p: CodingProblem) {
-    const all = store.getProblems();
-    const i = all.findIndex((x) => x.id === p.id);
-    if (i < 0) all.push(p); else all[i] = p;
-    store.setProblems(all); setItems(all); setEditing(null); toast.success("Saved");
+  async function load() {
+    setLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}/api/admin/problems`, { headers: authHeaders() });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data?.message || "Failed to load problems"); return; }
+      setItems(data);
+    } catch {
+      toast.error("Could not reach server");
+    } finally {
+      setLoading(false);
+    }
   }
-  function del(id: string) {
-    const all = store.getProblems().filter((x) => x.id !== id);
-    store.setProblems(all); setItems(all); toast.success("Deleted");
+
+  useEffect(() => { load(); }, []);
+
+  async function save(p: CodingProblem) {
+    const isNew = !p.id;
+    try {
+      const res = await fetch(
+        isNew ? `${BASE_URL}/api/admin/problems` : `${BASE_URL}/api/admin/problems/${p.id}`,
+        { method: isNew ? "POST" : "PUT", headers: authHeaders(), body: JSON.stringify(p) }
+      );
+      const data = await res.json();
+      if (!res.ok) { toast.error(data?.message || "Failed to save"); return; }
+      await load();
+      setEditing(null);
+      toast.success("Saved");
+    } catch {
+      toast.error("Could not reach server");
+    }
   }
-  function toggleHide(id: string) {
-    const all = store.getProblems();
-    const i = all.findIndex((x) => x.id === id);
-    if (i < 0) return;
-    all[i] = { ...all[i], isHidden: !all[i].isHidden };
-    store.setProblems(all); setItems(all);
-    toast.success(all[i].isHidden ? "Problem hidden" : "Problem visible");
+
+  async function del(id: string) {
+    try {
+      const res = await fetch(`${BASE_URL}/api/admin/problems/${id}`, { method: "DELETE", headers: authHeaders() });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { toast.error(data?.message || "Failed to delete"); return; }
+      setItems(items.filter((x) => x.id !== id));
+      toast.success("Deleted");
+    } catch {
+      toast.error("Could not reach server");
+    }
+  }
+
+  async function toggleHide(id: string) {
+    try {
+      const res = await fetch(`${BASE_URL}/api/admin/problems/${id}/toggle-hide`, { method: "PATCH", headers: authHeaders() });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data?.message || "Failed to update"); return; }
+      setItems(items.map((x) => (x.id === id ? { ...x, isHidden: data.isHidden } : x)));
+      toast.success(data.isHidden ? "Problem hidden" : "Problem visible");
+    } catch {
+      toast.error("Could not reach server");
+    }
   }
 
   async function handleFile(f: File) {
@@ -41,12 +85,20 @@ function PAdmin() {
       const rows = await readSheet(f);
       const parsed = rowsToProblems(rows).filter((p) => p.category.toLowerCase() !== "debugging");
       if (!parsed.length) return toast.error("No valid problems parsed.");
-      const all = [...store.getProblems(), ...parsed];
-      store.setProblems(all); setItems(all);
+      for (const p of parsed) {
+        await fetch(`${BASE_URL}/api/admin/problems`, { method: "POST", headers: authHeaders(), body: JSON.stringify(p) });
+      }
+      await load();
       toast.success(`Imported ${parsed.length} problems`);
       if (fileRef.current) fileRef.current.value = "";
-    } catch (e) { toast.error("Excel error: " + (e as Error).message); }
+    } catch (e) {
+      toast.error("Excel error: " + (e as Error).message);
+    }
   }
+
+  if (loading) return <Shell><div className="text-sm text-muted-foreground">Loading...</div></Shell>;
+
+  const visible = items.filter((p) => p.category.toLowerCase() !== "debugging");
 
   return (
     <Shell>
@@ -57,13 +109,13 @@ function PAdmin() {
             <Upload className="h-4 w-4" /> Import Excel
             <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} className="hidden" />
           </label>
-          <Button onClick={() => setEditing({ id: uid(), title: "", description: "", inputFormat: "", outputFormat: "", constraints: "", difficulty: "Easy", category: "Logic", marks: 10, samples: [{ input: "", expected: "" }], hiddenTests: [], isHidden: false, referenceSolution: "" })}><Plus className="h-4 w-4" /> New</Button>
+          <Button onClick={() => setEditing({ id: "", title: "", description: "", inputFormat: "", outputFormat: "", constraints: "", difficulty: "Easy", category: "Logic", marks: 10, samples: [{ input: "", expected: "" }], hiddenTests: [], isHidden: false, referenceSolution: "" })}><Plus className="h-4 w-4" /> New</Button>
         </div>
       </div>
       <p className="text-xs text-muted-foreground mt-2">Excel columns: Title | Difficulty | Category | Points | Description | InputFormat | OutputFormat | Constraints | SampleInput | SampleOutput | HiddenTestInput | HiddenTestOutput | ReferenceSolution</p>
 
       <div className="mt-6 space-y-3">
-        {items.filter((p) => p.category.toLowerCase() !== "debugging").map((p) => (
+        {visible.map((p) => (
           <GlassCard key={p.id} tint="plain" className="p-4 flex items-center justify-between flex-wrap gap-3">
             <div>
               <div className="font-bold flex items-center gap-2">
@@ -92,7 +144,7 @@ function ProblemEditor({ initial, onCancel, onSave }: { initial: CodingProblem; 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 grid place-items-center p-4 overflow-y-auto">
       <GlassCard tint="plain" className="max-w-3xl w-full p-6 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-xl font-bold">{initial.title ? "Edit" : "New"} Problem</h2>
+        <h2 className="text-xl font-bold">{initial.id ? "Edit" : "New"} Problem</h2>
         <div className="grid gap-3 sm:grid-cols-2 mt-4">
           <div><label className="text-xs">Title</label><Input value={p.title} onChange={(e) => setP({ ...p, title: e.target.value })} /></div>
           <div><label className="text-xs">Category</label><Input value={p.category} onChange={(e) => setP({ ...p, category: e.target.value })} /></div>
@@ -109,18 +161,18 @@ function ProblemEditor({ initial, onCancel, onSave }: { initial: CodingProblem; 
           <div className="sm:col-span-2"><label className="text-xs">Constraints</label><Input value={p.constraints} onChange={(e) => setP({ ...p, constraints: e.target.value })} /></div>
         </div>
 
-        {(["samples","hiddenTests"] as const).map((key) => (
+        {(["samples", "hiddenTests"] as const).map((key) => (
           <div key={key} className="mt-4">
             <div className="flex justify-between items-center">
-              <h3 className="font-semibold text-sm">{key === "samples" ? "Sample tests" : "Hidden tests"} ({(p[key]||[]).length})</h3>
-              <Button size="sm" variant="secondary" onClick={() => updTests(key, [...(p[key]||[]), { input: "", expected: "" }])}>Add</Button>
+              <h3 className="font-semibold text-sm">{key === "samples" ? "Sample tests" : "Hidden tests"} ({(p[key] || []).length})</h3>
+              <Button size="sm" variant="secondary" onClick={() => updTests(key, [...(p[key] || []), { input: "", expected: "" }])}>Add</Button>
             </div>
             <div className="space-y-2 mt-2">
-              {(p[key]||[]).map((t, i) => (
+              {(p[key] || []).map((t, i) => (
                 <div key={i} className="grid sm:grid-cols-2 gap-2 border rounded-lg p-2 bg-white/60">
-                  <textarea placeholder="Input" value={t.input} onChange={(e) => { const a=[...(p[key]||[])]; a[i]={...t, input:e.target.value}; updTests(key,a); }} className="rounded-md border p-2 text-xs font-mono min-h-16 bg-white" />
-                  <textarea placeholder="Expected" value={t.expected} onChange={(e) => { const a=[...(p[key]||[])]; a[i]={...t, expected:e.target.value}; updTests(key,a); }} className="rounded-md border p-2 text-xs font-mono min-h-16 bg-white" />
-                  <div className="sm:col-span-2 flex justify-end"><Button size="sm" variant="ghost" onClick={() => updTests(key, (p[key]||[]).filter((_,x) => x !== i))}><Trash2 className="h-3 w-3" /></Button></div>
+                  <textarea placeholder="Input" value={t.input} onChange={(e) => { const a = [...(p[key] || [])]; a[i] = { ...t, input: e.target.value }; updTests(key, a); }} className="rounded-md border p-2 text-xs font-mono min-h-16 bg-white" />
+                  <textarea placeholder="Expected" value={t.expected} onChange={(e) => { const a = [...(p[key] || [])]; a[i] = { ...t, expected: e.target.value }; updTests(key, a); }} className="rounded-md border p-2 text-xs font-mono min-h-16 bg-white" />
+                  <div className="sm:col-span-2 flex justify-end"><Button size="sm" variant="ghost" onClick={() => updTests(key, (p[key] || []).filter((_, x) => x !== i))}><Trash2 className="h-3 w-3" /></Button></div>
                 </div>
               ))}
             </div>

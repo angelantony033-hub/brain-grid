@@ -1,11 +1,13 @@
+// problems.$id.tsx
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState, lazy, Suspense, useEffect } from "react";
 import { Shell, GlassCard } from "@/components/Shell";
 import { Guard } from "@/components/Guard";
-import { store, uid } from "@/lib/storage";
+import type { CodingProblem } from "@/lib/storage";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { LANGUAGES, runCode } from "@/lib/piston";
+import { BASE_URL } from "@/config/apiConfig";
 import { toast } from "sonner";
 import { Loader2, Play, Send, Eye, EyeOff } from "lucide-react";
 
@@ -16,12 +18,16 @@ export const Route = createFileRoute("/problems/$id")({ component: () => <Guard 
 function ProblemPage() {
   const { id } = Route.useParams();
   const { user } = useAuth();
-  const problem = useMemo(() => store.getProblems().find((p) => p.id === id), [id]);
+
+  const [problem, setProblem] = useState<CodingProblem | null>(null);
+  const [loadingProblem, setLoadingProblem] = useState(true);
+  const [mySubmissions, setMySubmissions] = useState<any[]>([]);
+
   const [langLabel, setLangLabel] = useState(LANGUAGES[0].label);
   const lang = LANGUAGES.find((l) => l.label === langLabel)!;
   const draftKey = `dmi_draft_${id}_${langLabel}`;
   const [code, setCode] = useState(lang.template);
-  const [stdin, setStdin] = useState(problem?.samples[0]?.input || "");
+  const [stdin, setStdin] = useState("");
   const [running, setRunning] = useState(false);
   const [output, setOutput] = useState<{ stdout: string; stderr: string } | null>(null);
   const [results, setResults] = useState<{ pass: boolean; got: string; expected: string }[] | null>(null);
@@ -31,6 +37,39 @@ function ProblemPage() {
   } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showRef, setShowRef] = useState(false);
+
+  // Fetch problem + this student's submissions from the API
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoadingProblem(true);
+      try {
+        const token = localStorage.getItem("admin_token");
+        const headers = { Authorization: `Bearer ${token}` };
+
+        const res = await fetch(`${BASE_URL}/api/problems/${id}`, { headers });
+        const data = await res.json();
+        if (!cancelled && res.ok) setProblem(data);
+
+        const subRes = await fetch(`${BASE_URL}/api/submissions`, { headers });
+        const subs = await subRes.json();
+        if (!cancelled && subRes.ok) setMySubmissions(subs);
+      } catch (e) {
+        if (!cancelled) toast.error("Failed to load problem");
+      } finally {
+        if (!cancelled) setLoadingProblem(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [id]);
+
+  // Once problem loads, default the custom-input box to its first sample
+  useEffect(() => {
+    if (problem?.samples?.[0]?.input !== undefined) {
+      setStdin(problem.samples[0].input);
+    }
+  }, [problem]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -45,6 +84,16 @@ function ProblemPage() {
     return () => clearTimeout(t);
   }, [code, draftKey]);
 
+  if (loadingProblem) {
+    return (
+      <Shell>
+        <div className="grid place-items-center h-64 text-sm text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" />
+        </div>
+      </Shell>
+    );
+  }
+
   if (!problem) return <Shell><div>Problem not found.</div></Shell>;
   if (problem.isHidden) return (
     <Shell>
@@ -55,7 +104,9 @@ function ProblemPage() {
     </Shell>
   );
 
-  const solvedFully = store.getSubmissions().some((s) => s.studentId === user!.id && s.problemId === problem!.id && s.passed === s.total && s.total > 0);
+  const solvedFully = mySubmissions.some(
+    (s) => s.problemId === problem!.id && s.passed === s.total && s.total > 0
+  );
   const canSeeRef = solvedFully && !!problem.referenceSolution;
 
   async function handleRun() {
@@ -99,13 +150,22 @@ function ProblemPage() {
       const passed = tests.filter((t) => t.pass).length;
       const total = tests.length;
       const marks = total === 0 ? 0 : Math.round((passed / total) * problem!.marks);
-      const subs = store.getSubmissions();
-      subs.push({
-        id: uid(), studentId: user!.id, problemId: problem!.id, language: langLabel, code,
-        status: "Auto-Graded", marks, maxMarks: problem!.marks, passed, total,
-        testResults: tests, timestamp: Date.now(),
+
+      const token = localStorage.getItem("admin_token");
+      const res = await fetch(`${BASE_URL}/api/submissions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          problemId: problem!.id, language: langLabel, code,
+          status: "Auto-Graded", marks, maxMarks: problem!.marks, passed, total, testResults: tests,
+        }),
       });
-      store.setSubmissions(subs);
+      if (!res.ok) throw new Error("Failed to submit");
+      const saved = await res.json();
+
+      // Keep local submissions list in sync so "solvedFully" / reference-solution unlock updates immediately
+      setMySubmissions((prev) => [...prev, saved]);
+
       setGradeResult({ passed, total, marks, maxMarks: problem!.marks, tests });
       toast.success(`Auto-Graded: ${marks}/${problem!.marks} (${passed}/${total} tests)`);
     } catch (e) {

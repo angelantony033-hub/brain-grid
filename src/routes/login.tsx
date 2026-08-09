@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { BASE_URL } from "@/config/apiConfig";
+import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -14,6 +15,7 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const router = useRouter();
+  const { setSession } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -21,25 +23,19 @@ function LoginPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
     try {
       const res = await fetch(`${BASE_URL}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password, role: "student" }),
       });
-
       const data = await res.json().catch(() => ({}));
-
       if (!res.ok) {
         toast.error(data?.message || data?.msg || "Login failed");
         return;
       }
 
-      if (data?.token) {
-        localStorage.setItem("token", data.token);
-      }
-
+      setSession({ ...data.student, role: "student" }, data.token);
       toast.success("Welcome back!");
       router.navigate({ to: "/dashboard" });
     } catch {
