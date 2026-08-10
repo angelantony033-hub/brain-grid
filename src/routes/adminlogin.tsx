@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { BASE_URL } from "@/config/apiConfig";
+import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/adminlogin")({
   component: AdminLoginPage,
@@ -14,6 +15,7 @@ export const Route = createFileRoute("/adminlogin")({
 
 function AdminLoginPage() {
   const router = useRouter();
+  const { setSession } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -36,10 +38,7 @@ function AdminLoginPage() {
         return;
       }
 
-      if (data?.token) {
-        localStorage.setItem("admin_token", data.token);
-      }
-
+      setSession({ ...data.admin, role: "admin" }, data.token);
       toast.success("Welcome back!");
       router.navigate({ to: "/admin" });
     } catch {

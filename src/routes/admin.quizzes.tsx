@@ -1,39 +1,89 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Shell, GlassCard } from "@/components/Shell";
 import { Guard } from "@/components/Guard";
-import { store, uid } from "@/lib/storage";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import type { Quiz, QuizQuestion } from "@/lib/types";
 import { Trash2, Plus, Upload, Eye, EyeOff, BarChart3 } from "lucide-react";
 import { readSheet, rowsToQuestions } from "@/lib/excel";
+import { BASE_URL } from "@/config/apiConfig";
+
+function authHeaders() {
+  const token = localStorage.getItem("admin_token");
+  return { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
+}
+
+function uid() {
+  return Math.random().toString(36).slice(2, 10);
+}
 
 export const Route = createFileRoute("/admin/quizzes")({ component: () => <Guard role="admin"><QAdmin /></Guard> });
 
 function QAdmin() {
-  const [quizzes, setQuizzes] = useState<Quiz[]>(store.getQuizzes());
+  const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Quiz | null>(null);
 
-  function save(q: Quiz) {
-    const all = store.getQuizzes();
-    const i = all.findIndex((x) => x.id === q.id);
-    if (i < 0) all.push(q); else all[i] = q;
-    store.setQuizzes(all); setQuizzes(all); setEditing(null); toast.success("Saved");
+  async function loadQuizzes() {
+    setLoading(true);
+    try {
+      const res = await fetch(`${BASE_URL}/api/admin/quizzes`, { headers: authHeaders(), cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data?.message || "Failed to load quizzes"); return; }
+      setQuizzes(data);
+    } catch {
+      toast.error("Could not reach server");
+    } finally {
+      setLoading(false);
+    }
   }
-  function del(id: string) {
-    const all = store.getQuizzes().filter((x) => x.id !== id);
-    store.setQuizzes(all); setQuizzes(all); toast.success("Deleted");
+
+  useEffect(() => { loadQuizzes(); }, []);
+
+  async function save(q: Quiz) {
+    const isNew = !quizzes.some((x) => x.id === q.id);
+    try {
+      const res = await fetch(
+        isNew ? `${BASE_URL}/api/admin/quizzes` : `${BASE_URL}/api/admin/quizzes/${q.id}`,
+        { method: isNew ? "POST" : "PUT", headers: authHeaders(), body: JSON.stringify(q) }
+      );
+      const data = await res.json();
+      if (!res.ok) { toast.error(data?.message || "Failed to save quiz"); return; }
+      await loadQuizzes();
+      setEditing(null);
+      toast.success("Saved");
+    } catch {
+      toast.error("Could not reach server");
+    }
   }
-  function toggleHide(id: string) {
-    const all = store.getQuizzes();
-    const i = all.findIndex((x) => x.id === id);
-    if (i < 0) return;
-    all[i] = { ...all[i], isHidden: !all[i].isHidden };
-    store.setQuizzes(all); setQuizzes(all);
-    toast.success(all[i].isHidden ? "Quiz hidden from students" : "Quiz visible to students");
+
+  async function del(id: string) {
+    try {
+      const res = await fetch(`${BASE_URL}/api/admin/quizzes/${id}`, { method: "DELETE", headers: authHeaders() });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { toast.error(data?.message || "Failed to delete"); return; }
+      setQuizzes(quizzes.filter((x) => x.id !== id));
+      toast.success("Deleted");
+    } catch {
+      toast.error("Could not reach server");
+    }
   }
+
+  async function toggleHide(id: string) {
+    try {
+      const res = await fetch(`${BASE_URL}/api/admin/quizzes/${id}/toggle-hide`, { method: "PATCH", headers: authHeaders() });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data?.message || "Failed to update"); return; }
+      setQuizzes(quizzes.map((x) => (x.id === id ? { ...x, isHidden: data.isHidden } : x)));
+      toast.success(data.isHidden ? "Quiz hidden from students" : "Quiz visible to students");
+    } catch {
+      toast.error("Could not reach server");
+    }
+  }
+
+  if (loading) return <Shell><div className="text-sm text-muted-foreground">Loading quizzes...</div></Shell>;
 
   return (
     <Shell>

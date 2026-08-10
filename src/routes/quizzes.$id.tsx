@@ -1,28 +1,54 @@
 import { createFileRoute, useRouter, Link } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Shell, GlassCard } from "@/components/Shell";
 import { Guard } from "@/components/Guard";
-import { store, uid } from "@/lib/storage";
-import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
+import { BASE_URL } from "@/config/apiConfig";
 
 export const Route = createFileRoute("/quizzes/$id")({ component: () => <Guard role="student"><QuizPlay /></Guard> });
 
+type PlayQuestion = { id: string; text: string; options: string[]; marks: number };
+type PlayQuiz = { id: string; title: string; topic: string; difficulty: string; timeLimit: number; questions: PlayQuestion[] };
+type ReviewItem = { id: string; text: string; options: string[]; marks: number; correct: number; picked: number | null; isCorrect: boolean };
+
+function authHeaders() {
+  const token = localStorage.getItem("admin_token");
+  return { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
+}
+
 function QuizPlay() {
   const { id } = Route.useParams();
-  const { user } = useAuth();
   const router = useRouter();
-  const quiz = useMemo(() => store.getQuizzes().find((q) => q.id === id), [id]);
+  const [quiz, setQuiz] = useState<PlayQuiz | null>(null);
+  const [notFound, setNotFound] = useState(false);
   const [answers, setAnswers] = useState<Record<string, number>>({});
-  const [timeLeft, setTimeLeft] = useState((quiz?.timeLimit || 5) * 60);
-  const [submitted, setSubmitted] = useState<{ score: number; total: number } | null>(null);
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const [submitted, setSubmitted] = useState<{ score: number; total: number; review: ReviewItem[] } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!quiz || submitted) return;
+    async function load() {
+      try {
+        const res = await fetch(`${BASE_URL}/api/quizzes/${id}`, { headers: authHeaders(), cache: "no-store" });
+        const data = await res.json();
+        if (!res.ok) { setNotFound(true); return; }
+        setQuiz(data);
+        setTimeLeft(data.timeLimit * 60);
+      } catch {
+        toast.error("Could not reach server");
+        setNotFound(true);
+      }
+    }
+    load();
+  }, [id]);
+
+  useEffect(() => {
+    if (!quiz || submitted || timeLeft === null) return;
     const t = setInterval(() => {
       setTimeLeft((s) => {
+        if (s === null) return s;
         if (s <= 1) { clearInterval(t); handleSubmit(); return 0; }
         return s - 1;
       });
@@ -31,40 +57,35 @@ function QuizPlay() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quiz, submitted]);
 
-  if (!quiz) return <Shell><div>Quiz not found.</div></Shell>;
-  if (quiz.isHidden) return (
-    <Shell>
-      <GlassCard tint="plain" className="p-8 text-center max-w-lg mx-auto">
-        <h1 className="text-2xl font-bold">Quiz unavailable</h1>
-        <p className="text-sm text-muted-foreground mt-2">This quiz is currently hidden by the administrator.</p>
-        <Button className="mt-4" onClick={() => router.navigate({ to: "/quizzes" })}>Back to quizzes</Button>
-      </GlassCard>
-    </Shell>
-  );
+  if (notFound) return <Shell><div>Quiz not found or unavailable.</div></Shell>;
+  if (!quiz) return <Shell><div className="text-sm text-muted-foreground">Loading quiz...</div></Shell>;
 
-  const total = quiz.questions.reduce((a, b) => a + b.marks, 0);
-
-  function handleSubmit() {
-    if (submitted) return;
-    let score = 0;
-    quiz!.questions.forEach((q) => { if (answers[q.id] === q.correct) score += q.marks; });
-    const results = store.getQuizResults();
-    results.push({
-      id: uid(), quizId: quiz!.id, studentId: user!.id,
-      score, total, timestamp: Date.now(),
-      answers, status: "Reviewed", finalScore: score,
-    });
-    store.setQuizResults(results);
-    setSubmitted({ score, total });
-    toast.success(`Scored ${score}/${total}`);
+  async function handleSubmit() {
+    if (submitted || submitting) return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${BASE_URL}/api/quizzes/${id}/submit`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ answers }),
+      });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data?.message || "Failed to submit"); return; }
+      setSubmitted(data);
+      toast.success(`Scored ${data.score}/${data.total}`);
+    } catch {
+      toast.error("Could not reach server. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   const answered = Object.keys(answers).length;
-  const mm = Math.floor(timeLeft / 60).toString().padStart(2, "0");
-  const ss = (timeLeft % 60).toString().padStart(2, "0");
+  const mm = Math.floor((timeLeft || 0) / 60).toString().padStart(2, "0");
+  const ss = ((timeLeft || 0) % 60).toString().padStart(2, "0");
 
   if (submitted) {
-    const pct = total === 0 ? 0 : Math.round((submitted.score / total) * 100);
+    const pct = submitted.total === 0 ? 0 : Math.round((submitted.score / submitted.total) * 100);
     return (
       <Shell>
         <GlassCard tint="mint" className="p-8 text-center max-w-2xl mx-auto">
@@ -79,24 +100,20 @@ function QuizPlay() {
 
         <div className="mt-6 space-y-3 max-w-2xl mx-auto">
           <div className="text-sm font-semibold text-muted-foreground uppercase">Answer review</div>
-          {quiz.questions.map((q, i) => {
-            const picked = answers[q.id];
-            const correct = picked === q.correct;
-            return (
-              <GlassCard key={q.id} tint="plain" className={`p-4 border-l-4 ${correct ? "border-emerald-400" : "border-rose-400"}`}>
-                <div className="text-xs text-muted-foreground">Q{i + 1} · {q.marks} marks · {correct ? `+${q.marks}` : "0"} earned</div>
-                <div className="font-medium mt-1">{q.text}</div>
-                <div className="text-sm mt-2">
-                  Your answer: <span className={correct ? "text-emerald-700 font-semibold" : "text-rose-700 font-semibold"}>
-                    {picked === undefined ? "(unanswered)" : q.options[picked]}
-                  </span>
-                </div>
-                {!correct && (
-                  <div className="text-sm mt-1">Correct answer: <span className="text-emerald-700 font-semibold">{q.options[q.correct]}</span></div>
-                )}
-              </GlassCard>
-            );
-          })}
+          {submitted.review.map((q, i) => (
+            <GlassCard key={q.id} tint="plain" className={`p-4 border-l-4 ${q.isCorrect ? "border-emerald-400" : "border-rose-400"}`}>
+              <div className="text-xs text-muted-foreground">Q{i + 1} · {q.marks} marks · {q.isCorrect ? `+${q.marks}` : "0"} earned</div>
+              <div className="font-medium mt-1">{q.text}</div>
+              <div className="text-sm mt-2">
+                Your answer: <span className={q.isCorrect ? "text-emerald-700 font-semibold" : "text-rose-700 font-semibold"}>
+                  {q.picked === null ? "(unanswered)" : q.options[q.picked]}
+                </span>
+              </div>
+              {!q.isCorrect && (
+                <div className="text-sm mt-1">Correct answer: <span className="text-emerald-700 font-semibold">{q.options[q.correct]}</span></div>
+              )}
+            </GlassCard>
+          ))}
         </div>
       </Shell>
     );
@@ -111,7 +128,7 @@ function QuizPlay() {
         </div>
         <div className="flex items-center gap-3">
           <div className="px-4 py-2 rounded-full bg-white/80 font-mono text-lg tabular-nums">{mm}:{ss}</div>
-          <Button onClick={handleSubmit}>Submit</Button>
+          <Button onClick={handleSubmit} disabled={submitting}>{submitting ? "Submitting..." : "Submit"}</Button>
         </div>
       </div>
       <div className="mt-3"><Progress value={(answered / quiz.questions.length) * 100} /></div>
