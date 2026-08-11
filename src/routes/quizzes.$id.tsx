@@ -1,3 +1,4 @@
+import { useExamSecurity } from "@/hooks/useExamSecurity";
 import { createFileRoute, useRouter, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Shell, GlassCard } from "@/components/Shell";
@@ -27,6 +28,31 @@ function QuizPlay() {
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [submitted, setSubmitted] = useState<{ score: number; total: number; review: ReviewItem[] } | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [examStarted, setExamStarted] = useState(false);
+
+  const startExam = async () => {
+  try {
+    await document.documentElement.requestFullscreen();
+
+    setExamStarted(true);
+  } catch {
+    toast.error("Fullscreen is required to start the test.");
+  }
+};
+
+  const handleSecurityViolation = (reason: string) => {
+  toast.error("Quiz cancelled", {
+    description: reason,
+    duration: 5000,
+  });
+
+  router.navigate({ to: "/quizzes" });
+};
+
+useExamSecurity({
+  enabled: !!quiz && examStarted && !submitted,
+  onViolation: handleSecurityViolation,
+});
 
   useEffect(() => {
     async function load() {
@@ -45,17 +71,32 @@ function QuizPlay() {
   }, [id]);
 
   useEffect(() => {
-    if (!quiz || submitted || timeLeft === null) return;
-    const t = setInterval(() => {
-      setTimeLeft((s) => {
-        if (s === null) return s;
-        if (s <= 1) { clearInterval(t); handleSubmit(); return 0; }
-        return s - 1;
-      });
-    }, 1000);
-    return () => clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [quiz, submitted]);
+  if (!quiz || !examStarted || submitted || timeLeft === null) {
+    return;
+  }
+
+  const timer = window.setInterval(() => {
+    setTimeLeft((current) => {
+      if (current === null) {
+        return null;
+      }
+
+      if (current <= 1) {
+        window.clearInterval(timer);
+        handleSubmit();
+        return 0;
+      }
+
+      return current - 1;
+    });
+  }, 1000);
+
+  return () => {
+    window.clearInterval(timer);
+  };
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [quiz, examStarted, submitted]);
 
   if (notFound) return <Shell><div>Quiz not found or unavailable.</div></Shell>;
   if (!quiz) return <Shell><div className="text-sm text-muted-foreground">Loading quiz...</div></Shell>;
@@ -83,6 +124,41 @@ function QuizPlay() {
   const answered = Object.keys(answers).length;
   const mm = Math.floor((timeLeft || 0) / 60).toString().padStart(2, "0");
   const ss = ((timeLeft || 0) % 60).toString().padStart(2, "0");
+
+  // Show Start Test screen before the exam begins
+if (!examStarted) {
+  return (
+    <Shell>
+      <GlassCard
+        tint="plain"
+        className="max-w-xl mx-auto p-8 text-center"
+      >
+        <h1 className="text-2xl font-bold">
+          {quiz.title}
+        </h1>
+
+        <p className="mt-3 text-sm text-muted-foreground">
+          This test must be completed in fullscreen mode.
+        </p>
+
+        <div className="mt-4 text-sm text-muted-foreground space-y-1">
+          <p>• Do not switch tabs.</p>
+          <p>• Do not minimize the browser.</p>
+          <p>• Do not switch applications.</p>
+          <p>• Do not exit fullscreen mode.</p>
+        </div>
+
+        <Button
+          className="mt-6"
+          onClick={startExam}
+        >
+          Start Test
+        </Button>
+      </GlassCard>
+    </Shell>
+  );
+}
+
 
   if (submitted) {
     const pct = submitted.total === 0 ? 0 : Math.round((submitted.score / submitted.total) * 100);

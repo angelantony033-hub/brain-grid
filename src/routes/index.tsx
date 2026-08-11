@@ -1,4 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { useAuth } from "@/lib/auth";
 import { Link } from "@tanstack/react-router";
 import { Shell, GlassCard } from "@/components/Shell";
 import { Button } from "@/components/ui/button";
@@ -9,6 +11,15 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user) {
+      navigate({ to: "/dashboard", replace: true });
+    }
+  }, [user, navigate]);
+
   return (
     <Shell>
       <section className="relative overflow-hidden rounded-3xl border border-white/60 bg-white/60 backdrop-blur-xl p-8 sm:p-14 shadow-sm">

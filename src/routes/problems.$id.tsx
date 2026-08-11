@@ -1,5 +1,5 @@
 // problems.$id.tsx
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useMemo, useState, lazy, Suspense, useEffect } from "react";
 import { Shell, GlassCard } from "@/components/Shell";
 import { Guard } from "@/components/Guard";
@@ -10,6 +10,7 @@ import { LANGUAGES, runCode } from "@/lib/piston";
 import { BASE_URL } from "@/config/apiConfig";
 import { toast } from "sonner";
 import { Loader2, Play, Send, Eye, EyeOff } from "lucide-react";
+import { useExamSecurity } from "@/hooks/useExamSecurity";
 
 const MonacoEditor = lazy(() => import("@monaco-editor/react").then((m) => ({ default: m.default })));
 
@@ -18,6 +19,7 @@ export const Route = createFileRoute("/problems/$id")({ component: () => <Guard 
 function ProblemPage() {
   const { id } = Route.useParams();
   const { user } = useAuth();
+  const router = useRouter();
 
   const [problem, setProblem] = useState<CodingProblem | null>(null);
   const [loadingProblem, setLoadingProblem] = useState(true);
@@ -37,6 +39,20 @@ function ProblemPage() {
   } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showRef, setShowRef] = useState(false);
+
+  const handleSecurityViolation = (reason: string) => {
+    toast.error("Test cancelled", {
+      description: reason,
+      duration: 5000,
+    });
+
+    router.navigate({ to: "/problems" });
+  };
+
+  useExamSecurity({
+    enabled: !!problem,
+    onViolation: handleSecurityViolation,
+  });
 
   // Fetch problem + this student's submissions from the API
   useEffect(() => {
